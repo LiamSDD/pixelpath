@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pixelpath"
+version = "0.1.0"
+description = "Zero-dependency SVG rasterizer for Python. Renders SVG paths and shapes to anti-aliased, transparent PNGs. No Cairo, no Pillow, no native code."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "LiamSDD" }]
+keywords = ["svg", "png", "rasterizer", "rendering", "vector", "graphics", "pure-python"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.urls]
+Homepage = "https://github.com/LiamSDD/pixelpath"
+Issues = "https://github.com/LiamSDD/pixelpath/issues"
+
+[project.scripts]
+pixelpath = "pixelpath.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pixelpath = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
