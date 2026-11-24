@@ -5,7 +5,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776ab.svg)](https://www.python.org/)
 [![Dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests: 223 passing](https://img.shields.io/badge/tests-223%20passing-brightgreen.svg)](tests)
+[![Tests: 243 passing](https://img.shields.io/badge/tests-243%20passing-brightgreen.svg)](tests)
 
 pixelpath turns icons, logos, badges and other path-based SVGs into PNG files
 using nothing but the Python standard library (`zlib`, `struct`, `math` and
@@ -97,6 +97,7 @@ Every image below was rendered by pixelpath itself from the SVGs in
 | --- | --- |
 | Document | `<svg>` with `width`, `height` (`px`, `pt`, `pc`, `mm`, `cm`, `in`, `em`, `ex`), `viewBox`; `preserveAspectRatio="xMidYMid meet"` behaviour; default size 300x150 |
 | Structure | Nested `<g>` (also `<a>`, `<switch>` and nested `<svg>` treated as groups) |
+| References | `<use>` with `href` or `xlink:href` pointing at any element by `#id`, including elements inside `<defs>`; `x`/`y` translation, the `<use>` element's `transform`, `opacity` and presentation attributes inherited by the referenced content; `<symbol>` with `viewBox` scaled to the `<use>` `width`/`height` (default 100%) using `xMidYMid meet`; nesting limited to 32 levels and 10,000 expanded elements, circular references raise `SVGError` |
 | Shapes | `path`, `rect` (with `rx`/`ry`), `circle`, `ellipse`, `polygon`, `polyline`, `line` |
 | Path data | `M L H V C S Q T A Z` absolute and relative, implicit repeats, compact numbers (`1.5.5`, `-1-2`, `1e-3`), unseparated arc flags, S/T reflection |
 | Transforms | `matrix`, `translate`, `scale`, `rotate` (with optional centre), `skewX`, `skewY`, lists of any length |
@@ -117,7 +118,10 @@ everything else:
   without a fallback colour paints nothing
 - `<text>`, fonts, `<image>`, `<foreignObject>`
 - Filters, masks, clip paths, markers
-- `<use>` and `<symbol>` references, contents of `<defs>`
+- `<use>` references to external files (`href="other.svg#id"`) and missing ids;
+  symbol clipping to its viewport, `preserveAspectRatio` on `<symbol>`, and
+  `width`/`height` on a `<use>` that references a nested `<svg>`
+- Rendering `<defs>` or `<symbol>` content directly (only through `<use>`, as in SVG)
 - `<style>` sheets and CSS selectors (inline `style` attributes are supported)
 - `stroke-dasharray`, `stroke-linejoin` / `stroke-linecap` other than round
   (miter, bevel, butt and square are drawn as round), `stroke-miterlimit`
@@ -178,7 +182,7 @@ git clone https://github.com/LiamSDD/pixelpath
 cd pixelpath
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-python3 -m pytest -q      # 223 tests
+python3 -m pytest -q      # 243 tests
 python3 bench.py
 ```
 
