@@ -12,6 +12,9 @@ from .path import Command, PathError, ellipse_commands, parse_path, polygon_comm
 from .transform import Matrix, TransformError, parse_transform
 
 SVG_NAMESPACE = "http://www.w3.org/2000/svg"
+XLINK_HREF = "{http://www.w3.org/1999/xlink}href"
+MAX_USE_DEPTH = 32
+MAX_USE_EXPANSION = 10000
 DEFAULT_WIDTH = 300.0
 DEFAULT_HEIGHT = 150.0
 NUMBER_PATTERN = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
@@ -183,20 +186,52 @@ def _is_valid_paint(value: str) -> bool:
     return True
 
 
+def _index_ids(root: ElementTree.Element) -> Dict[str, ElementTree.Element]:
+    index: Dict[str, ElementTree.Element] = {}
+    for element in root.iter():
+        identifier = element.get("id")
+        if identifier and identifier not in index:
+            index[identifier] = element
+    return index
+
+
 class _Renderer:
-    def __init__(self, canvas: Canvas, view_box: ViewBox) -> None:
+    def __init__(self, canvas: Canvas, view_box: ViewBox, ids: Optional[Dict[str, ElementTree.Element]] = None) -> None:
         self.canvas = canvas
         self.view_width = view_box[2]
         self.view_height = view_box[3]
         self.view_diagonal = math.sqrt((view_box[2] ** 2 + view_box[3] ** 2) / 2)
+        self.ids = ids or {}
+        self.references: List[ElementTree.Element] = []
+        self.expanded = 0
 
     def render(self, element: ElementTree.Element, inherited: Dict[str, str], matrix: Matrix, opacity: float) -> None:
+        if self.references:
+            self.count_expansion()
         tag = _is_svg_element(element)
-        if tag is None or (tag not in CONTAINER_TAGS and tag not in SHAPE_TAGS):
+        if tag is None or (tag not in CONTAINER_TAGS and tag not in SHAPE_TAGS and tag != "use"):
             return
+        cascaded = self.cascade(tag, element, inherited, matrix, opacity)
+        if cascaded is None:
+            return
+        style, matrix, opacity = cascaded
+        if tag in CONTAINER_TAGS:
+            for child in element:
+                self.render(child, style, matrix, opacity)
+            return
+        if tag == "use":
+            self.render_use(element, style, matrix, opacity)
+            return
+        if style["visibility"].lower() in ("hidden", "collapse"):
+            return
+        self.draw_shape(tag, element, style, matrix, opacity)
+
+    def cascade(
+        self, tag: str, element: ElementTree.Element, inherited: Dict[str, str], matrix: Matrix, opacity: float
+    ) -> Optional[Tuple[Dict[str, str], Matrix, float]]:
         declared = _declarations(element)
         if declared.get("display", "").lower() == "none":
-            return
+            return None
         style = dict(inherited)
         for name in INHERITED_PROPERTIES:
             if name not in declared:
@@ -213,14 +248,65 @@ class _Renderer:
             except TransformError as error:
                 raise SVGError(f"invalid transform on <{tag}>: {error}") from error
         if opacity <= 0:
+            return None
+        return style, matrix, opacity
+
+    def count_expansion(self) -> None:
+        self.expanded += 1
+        if self.expanded > MAX_USE_EXPANSION:
+            raise UnsafeSVGError(f"<use> expansion exceeds {MAX_USE_EXPANSION} elements")
+
+    def render_use(self, element: ElementTree.Element, style: Dict[str, str], matrix: Matrix, opacity: float) -> None:
+        reference = (element.get("href") or element.get(XLINK_HREF) or "").strip()
+        if not reference.startswith("#"):
             return
-        if tag in CONTAINER_TAGS:
-            for child in element:
-                self.render(child, style, matrix, opacity)
+        target = self.ids.get(reference[1:])
+        if target is None:
             return
-        if style["visibility"].lower() in ("hidden", "collapse"):
+        if any(active is target for active in self.references):
+            raise SVGError(f"circular <use> reference to {reference!r}")
+        if len(self.references) >= MAX_USE_DEPTH:
+            raise UnsafeSVGError(f"<use> nesting depth exceeds {MAX_USE_DEPTH}")
+        width, height = self.view_width, self.view_height
+        matrix = matrix.multiply(Matrix.translation(self.length(element, "x", width), self.length(element, "y", height)))
+        self.references.append(target)
+        try:
+            if _is_svg_element(target) == "symbol":
+                self.render_symbol(target, element, style, matrix, opacity)
+            else:
+                self.render(target, style, matrix, opacity)
+        finally:
+            self.references.pop()
+
+    def render_symbol(
+        self, symbol: ElementTree.Element, use: ElementTree.Element, inherited: Dict[str, str], matrix: Matrix, opacity: float
+    ) -> None:
+        self.count_expansion()
+        cascaded = self.cascade("symbol", symbol, inherited, matrix, opacity)
+        if cascaded is None:
             return
-        self.draw_shape(tag, element, style, matrix, opacity)
+        style, matrix, opacity = cascaded
+        view_box = _parse_view_box(symbol.get("viewBox"))
+        if view_box is not None:
+            width = self.symbol_extent(use, symbol, "width", self.view_width)
+            height = self.symbol_extent(use, symbol, "height", self.view_height)
+            if width <= 0 or height <= 0:
+                return
+            fit = min(width / view_box[2], height / view_box[3])
+            offset_x = (width - view_box[2] * fit) / 2 - view_box[0] * fit
+            offset_y = (height - view_box[3] * fit) / 2 - view_box[1] * fit
+            matrix = matrix.multiply(Matrix(fit, 0.0, 0.0, fit, offset_x, offset_y))
+        for child in symbol:
+            self.render(child, style, matrix, opacity)
+
+    def symbol_extent(self, use: ElementTree.Element, symbol: ElementTree.Element, name: str, reference: float) -> float:
+        for source in (use, symbol):
+            text = source.get(name)
+            if text is not None and text.strip().lower() != "auto":
+                value = _parse_length(text, reference, None)
+                if value is not None:
+                    return value
+        return reference
 
     def length(self, element: ElementTree.Element, name: str, reference: float, default: float = 0.0) -> float:
         value = _parse_length(element.get(name), reference, default)
@@ -331,5 +417,5 @@ def render_svg(
     offset_x = (output_width - view_box[2] * fit) / 2 - view_box[0] * fit
     offset_y = (output_height - view_box[3] * fit) / 2 - view_box[1] * fit
     viewport = Matrix(fit, 0.0, 0.0, fit, offset_x, offset_y)
-    _Renderer(canvas, view_box).render(root, dict(INITIAL_STYLE), viewport, 1.0)
+    _Renderer(canvas, view_box, _index_ids(root)).render(root, dict(INITIAL_STYLE), viewport, 1.0)
     return canvas

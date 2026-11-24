@@ -275,3 +275,154 @@ def test_invalid_path_data_raises_svg_error():
 def test_conflicting_size_options_raise():
     with pytest.raises(ValueError):
         render_svg(svg(""), width=10, scale=2)
+
+
+XLINK = 'xmlns:xlink="http://www.w3.org/1999/xlink"'
+
+
+def test_use_references_element_in_defs_with_translation():
+    body = '<defs><rect id="box" width="5" height="5" fill="red"/></defs><use href="#box" x="10" y="10"/>'
+    canvas = render_svg(svg(body))
+    assert canvas.get_pixel(12, 12) == (255, 0, 0, 255)
+    assert canvas.get_pixel(2, 2)[3] == 0
+
+
+def test_use_supports_xlink_href():
+    body = '<defs><rect id="box" width="5" height="5" fill="blue"/></defs><use xlink:href="#box" x="5"/>'
+    canvas = render_svg(svg(body, f'{XLINK} width="20" height="20"'))
+    assert canvas.get_pixel(7, 2) == (0, 0, 255, 255)
+    assert canvas.get_pixel(2, 2)[3] == 0
+
+
+def test_use_references_rendered_element_and_draws_it_twice():
+    body = '<rect id="box" width="5" height="5" fill="red"/><use href="#box" x="10"/>'
+    canvas = render_svg(svg(body))
+    assert canvas.get_pixel(2, 2) == (255, 0, 0, 255)
+    assert canvas.get_pixel(12, 2) == (255, 0, 0, 255)
+    assert canvas.get_pixel(7, 2)[3] == 0
+
+
+def test_use_transform_applies_before_xy_translation():
+    body = '<defs><rect id="box" width="2" height="2" fill="red"/></defs><use href="#box" x="2" y="2" transform="scale(2)"/>'
+    canvas = render_svg(svg(body))
+    assert canvas.get_pixel(5, 5) == (255, 0, 0, 255)
+    assert canvas.get_pixel(3, 3)[3] == 0
+    assert canvas.get_pixel(9, 9)[3] == 0
+
+
+def test_use_passes_inherited_presentation_attributes():
+    body = (
+        '<defs><g id="shape"><rect width="5" height="5"/><rect x="5" width="5" height="5" fill="lime"/></g></defs>'
+        '<g fill="blue"><use href="#shape"/></g><use href="#shape" y="10" fill="red" opacity="0.5"/>'
+    )
+    canvas = render_svg(svg(body))
+    assert canvas.get_pixel(2, 2) == (0, 0, 255, 255)
+    assert canvas.get_pixel(7, 2) == (0, 255, 0, 255)
+    red = canvas.get_pixel(2, 12)
+    assert red[:3] == (255, 0, 0) and abs(red[3] - 128) <= 1
+
+
+def test_use_display_none_is_skipped():
+    body = '<defs><rect id="box" width="20" height="20"/></defs><use href="#box" display="none"/>'
+    assert render_svg(svg(body)).get_pixel(5, 5)[3] == 0
+
+
+def test_symbol_is_not_rendered_directly():
+    body = '<symbol id="icon"><rect width="20" height="20" fill="red"/></symbol>'
+    assert render_svg(svg(body)).get_pixel(5, 5)[3] == 0
+
+
+def test_use_symbol_with_viewbox_scales_to_width_and_height():
+    body = (
+        '<defs><symbol id="icon" viewBox="0 0 2 2"><rect width="1" height="1" fill="red"/></symbol></defs>'
+        '<use href="#icon" x="4" y="4" width="10" height="10"/>'
+    )
+    canvas = render_svg(svg(body))
+    assert canvas.get_pixel(6, 6) == (255, 0, 0, 255)
+    assert canvas.get_pixel(8, 8) == (255, 0, 0, 255)
+    assert canvas.get_pixel(10, 10)[3] == 0
+    assert canvas.get_pixel(3, 3)[3] == 0
+
+
+def test_use_symbol_viewbox_meets_and_centres():
+    body = (
+        '<symbol id="icon" viewBox="0 0 10 10"><rect width="10" height="10" fill="red"/></symbol>'
+        '<use href="#icon" width="20" height="10"/>'
+    )
+    canvas = render_svg(svg(body))
+    assert canvas.get_pixel(2, 5)[3] == 0
+    assert canvas.get_pixel(10, 5) == (255, 0, 0, 255)
+    assert canvas.get_pixel(17, 5)[3] == 0
+
+
+def test_use_symbol_defaults_to_full_viewport():
+    body = '<symbol id="icon" viewBox="0 0 1 1"><rect width="1" height="1" fill="red"/></symbol><use href="#icon"/>'
+    canvas = render_svg(svg(body))
+    assert canvas.get_pixel(1, 1) == (255, 0, 0, 255)
+    assert canvas.get_pixel(18, 18) == (255, 0, 0, 255)
+
+
+def test_use_symbol_without_viewbox_only_translates():
+    body = '<symbol id="icon"><rect width="4" height="4" fill="red"/></symbol><use href="#icon" x="10" y="10" width="2" height="2"/>'
+    canvas = render_svg(svg(body))
+    assert canvas.get_pixel(12, 12) == (255, 0, 0, 255)
+    assert canvas.get_pixel(5, 5)[3] == 0
+
+
+def test_use_symbol_with_zero_width_draws_nothing():
+    body = '<symbol id="icon" viewBox="0 0 1 1"><rect width="1" height="1" fill="red"/></symbol><use href="#icon" width="0"/>'
+    assert render_svg(svg(body)).get_pixel(5, 5)[3] == 0
+
+
+def test_nested_use_chain():
+    body = (
+        '<defs><rect id="a" width="2" height="2" fill="red"/><use id="b" href="#a" x="4"/></defs>'
+        '<use href="#b" x="4"/>'
+    )
+    canvas = render_svg(svg(body))
+    assert canvas.get_pixel(9, 1) == (255, 0, 0, 255)
+    assert canvas.get_pixel(5, 1)[3] == 0
+
+
+def test_use_with_missing_or_external_reference_is_ignored():
+    body = '<use href="#missing"/><use href="other.svg#box"/><use/><rect x="10" width="5" height="5" fill="red"/>'
+    canvas = render_svg(svg(body))
+    assert canvas.get_pixel(12, 2) == (255, 0, 0, 255)
+    assert canvas.get_pixel(2, 2)[3] == 0
+
+
+def test_use_self_reference_raises():
+    with pytest.raises(SVGError, match="circular"):
+        render_svg(svg('<use id="loop" href="#loop"/>'))
+
+
+def test_use_reference_cycle_raises():
+    body = '<defs><g id="a"><use href="#b"/></g><g id="b"><use href="#a"/></g></defs><use href="#a"/>'
+    with pytest.raises(SVGError, match="circular"):
+        render_svg(svg(body))
+
+
+def test_use_referencing_its_own_ancestor_raises():
+    with pytest.raises(SVGError, match="circular"):
+        render_svg(svg('<g id="outer"><rect width="2" height="2"/><use href="#outer" x="3"/></g>'))
+
+
+def test_use_nesting_deeper_than_limit_is_refused():
+    chain = '<rect id="u0" width="1" height="1"/>' + "".join(f'<use id="u{index}" href="#u{index - 1}"/>' for index in range(1, 40))
+    with pytest.raises(UnsafeSVGError, match="depth"):
+        render_svg(svg(f"<defs>{chain}</defs><use href='#u39'/>"))
+
+
+def test_use_nesting_within_limit_renders():
+    chain = '<rect id="u0" width="1" height="1" fill="red"/>' + "".join(f'<use id="u{index}" href="#u{index - 1}"/>' for index in range(1, 30))
+    canvas = render_svg(svg(f"<defs>{chain}</defs><use href='#u29'/>"))
+    assert canvas.get_pixel(0, 0) == (255, 0, 0, 255)
+
+
+def test_exponential_use_expansion_is_refused():
+    levels = ['<rect id="l0" width="1" height="1"/>']
+    for level in range(1, 12):
+        uses = "".join(f'<use href="#l{level - 1}"/>' for _ in range(10))
+        levels.append(f'<g id="l{level}">{uses}</g>')
+    with pytest.raises(UnsafeSVGError, match="expan"):
+        render_svg(svg(f"<defs>{''.join(levels)}</defs><use href='#l11'/>"))
