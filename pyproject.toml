@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pixelpath"
-version = "0.1.0"
+version = "0.2.0"
 description = "Zero-dependency SVG rasterizer for Python. Renders SVG paths and shapes to anti-aliased, transparent PNGs. No Cairo, no Pillow, no native code."
 readme = "README.md"
 requires-python = ">=3.9"
