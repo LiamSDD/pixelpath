@@ -5,7 +5,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776ab.svg)](https://www.python.org/)
 [![Dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests: 264 passing](https://img.shields.io/badge/tests-264%20passing-brightgreen.svg)](tests)
+[![Tests: 275 passing](https://img.shields.io/badge/tests-275%20passing-brightgreen.svg)](tests)
 
 pixelpath turns icons, logos, badges and other path-based SVGs into PNG files
 using nothing but the Python standard library (`zlib`, `struct`, `math` and
@@ -21,6 +21,8 @@ using nothing but the Python standard library (`zlib`, `struct`, `math` and
   RGBA PNGs that drop cleanly into web pages, READMEs and app bundles.
 - **Safe XML handling.** Documents containing `<!DOCTYPE` or `<!ENTITY` are refused
   before parsing, which shuts the door on XXE and "billion laughs" entity expansion.
+- **Bounded output.** Output images are limited to 16384 pixels per side and
+  100 megapixels in total; larger requests raise `SVGError` instead of exhausting memory.
 - **Small and readable.** A few hundred lines per stage, each stage separately
   tested and usable on its own.
 
@@ -189,7 +191,7 @@ git clone https://github.com/LiamSDD/pixelpath
 cd pixelpath
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-python3 -m pytest -q      # 264 tests
+python3 -m pytest -q      # 275 tests
 python3 bench.py
 ```
 
@@ -197,6 +199,10 @@ The test suite covers path-parser edge cases, arc conversion, coverage accuracy
 (a filled square's total coverage equals its area within 0.5%), fill rules, PNG
 validity and CRCs, transforms, colour parsing, XXE refusal, the CLI end to end and
 a golden logo render with exact pixel colours. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Security
+
+Please report vulnerabilities privately; see [SECURITY.md](SECURITY.md).
 
 ## License
 

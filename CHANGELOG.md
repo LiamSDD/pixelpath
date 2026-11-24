@@ -18,6 +18,10 @@ All notable changes to this project are documented here. The format follows
   presentation attributes. Miter joins beyond the limit fall back to bevel.
 - Keyword-only `linecap`, `linejoin` and `miterlimit` parameters on
   `Canvas.stroke_path`.
+- `SECURITY.md` with the supported versions, private reporting through GitHub
+  and the security scope.
+- Issue templates for bug reports and feature requests, an issue template
+  config pointing questions to GitHub Discussions, and a pull request template.
 
 ### Changed
 
@@ -33,6 +37,10 @@ All notable changes to this project are documented here. The format follows
 - `<use>` expansion is bounded: circular references raise `SVGError`, and nesting
   deeper than 32 levels or expanding more than 10,000 elements raises
   `UnsafeSVGError`, so crafted files cannot cause exponential blow-up.
+- `render_svg` and the `pixelpath` command refuse output larger than 16384 pixels
+  per side or 100 megapixels in total with an `SVGError`, and reject non-finite
+  sizes with a `ValueError`, so huge declared dimensions or size options cannot
+  exhaust memory.
 
 ## [0.1.0] - 2026-11-24
 

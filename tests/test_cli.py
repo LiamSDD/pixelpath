@@ -111,3 +111,10 @@ def test_module_entry_point_end_to_end(input_file, tmp_path):
     )
     assert completed.returncode == 0, completed.stderr
     assert read_png(output)[:2] == (40, 20)
+
+
+def test_oversized_output_reports_error(input_file, tmp_path, capsys):
+    output = tmp_path / "huge.png"
+    assert main([str(input_file), "-o", str(output), "--width", "20000"]) == 1
+    assert "too large" in capsys.readouterr().err
+    assert not output.exists()
