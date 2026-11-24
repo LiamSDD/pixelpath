@@ -13,6 +13,20 @@ All notable changes to this project are documented here. The format follows
   element's `transform` and inherited presentation attributes.
 - `<symbol>` instancing through `<use>`, mapping the symbol `viewBox` onto the
   `<use>` `width`/`height` with `xMidYMid meet`.
+- `stroke-linecap` (`butt`, `round`, `square`), `stroke-linejoin` (`miter`,
+  `round`, `bevel`) and `stroke-miterlimit` in `render_svg`, inherited like other
+  presentation attributes. Miter joins beyond the limit fall back to bevel.
+- Keyword-only `linecap`, `linejoin` and `miterlimit` parameters on
+  `Canvas.stroke_path`.
+
+### Changed
+
+- `render_svg` now uses the SVG defaults of `butt` caps and `miter` joins (miter
+  limit 4) instead of drawing every stroke with round caps and joins. Documents
+  that relied on the old look should set `stroke-linecap="round"` and
+  `stroke-linejoin="round"`. `Canvas.stroke_path` still defaults to round caps
+  and joins, so direct callers are unaffected. The showcase images were
+  regenerated.
 
 ### Security
 

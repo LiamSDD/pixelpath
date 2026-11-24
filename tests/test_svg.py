@@ -426,3 +426,53 @@ def test_exponential_use_expansion_is_refused():
         levels.append(f'<g id="l{level}">{uses}</g>')
     with pytest.raises(UnsafeSVGError, match="expan"):
         render_svg(svg(f"<defs>{''.join(levels)}</defs><use href='#l11'/>"))
+
+
+POLYLINE_CORNER = '<polyline points="4 4 16 4 16 16" fill="none" stroke="red" stroke-width="4"{}/>'
+SEGMENT = '<line x1="4" y1="10" x2="16" y2="10" stroke="red" stroke-width="4"{}/>'
+
+
+def test_svg_default_linecap_is_butt():
+    canvas = render_svg(svg(SEGMENT.format("")))
+    assert canvas.get_pixel(4, 10) == (255, 0, 0, 255)
+    assert canvas.get_pixel(3, 10)[3] == 0
+    assert canvas.get_pixel(16, 10)[3] == 0
+
+
+def test_svg_linecap_round_and_square():
+    round_canvas = render_svg(svg(SEGMENT.format(' stroke-linecap="round"')))
+    assert round_canvas.get_pixel(3, 10) == (255, 0, 0, 255)
+    assert round_canvas.get_pixel(1, 10)[3] == 0
+    square_canvas = render_svg(svg(SEGMENT.format(' style="stroke-linecap: square"')))
+    assert square_canvas.get_pixel(2, 8) == (255, 0, 0, 255)
+    assert square_canvas.get_pixel(1, 10)[3] == 0
+
+
+def test_svg_default_linejoin_is_miter():
+    canvas = render_svg(svg(POLYLINE_CORNER.format("")))
+    assert canvas.get_pixel(17, 2) == (255, 0, 0, 255)
+
+
+def test_svg_linejoin_bevel_and_round():
+    assert render_svg(svg(POLYLINE_CORNER.format(' stroke-linejoin="bevel"'))).get_pixel(17, 2)[3] == 0
+    assert 0 < render_svg(svg(POLYLINE_CORNER.format(' stroke-linejoin="round"'))).get_pixel(17, 2)[3] < 255
+
+
+def test_svg_miterlimit_falls_back_to_bevel():
+    assert render_svg(svg(POLYLINE_CORNER.format(' stroke-miterlimit="1.2"'))).get_pixel(17, 2)[3] == 0
+    assert render_svg(svg(POLYLINE_CORNER.format(' stroke-miterlimit="2"'))).get_pixel(17, 2)[3] == 255
+
+
+def test_svg_stroke_line_properties_are_inherited():
+    body = f'<g stroke-linejoin="bevel" stroke-linecap="round">{POLYLINE_CORNER.format("")}</g>'
+    canvas = render_svg(svg(body))
+    assert canvas.get_pixel(17, 2)[3] == 0
+    assert canvas.get_pixel(3, 4) == (255, 0, 0, 255)
+
+
+def test_svg_invalid_stroke_line_values_are_ignored():
+    invalid = POLYLINE_CORNER.format(' stroke-linejoin="spiky" stroke-miterlimit="0.5" stroke-linecap="flat"')
+    body = f'<g stroke-linejoin="bevel">{invalid}</g>'
+    canvas = render_svg(svg(body))
+    assert canvas.get_pixel(17, 2)[3] == 0
+    assert canvas.get_pixel(3, 4)[3] == 0

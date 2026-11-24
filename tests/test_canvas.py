@@ -194,3 +194,121 @@ def test_to_png_bytes_and_save(tmp_path):
     target = tmp_path / "out.png"
     canvas.save(target)
     assert target.read_bytes() == data
+
+
+CORNER = "M4 4 L16 4 L16 16"
+
+
+def test_stroke_defaults_remain_round_caps_and_joins():
+    default = Canvas(20, 20)
+    default.stroke_path(CORNER, "black", 4)
+    explicit = Canvas(20, 20)
+    explicit.stroke_path(CORNER, "black", 4, linecap="round", linejoin="round")
+    assert default.to_rgba_bytes() == explicit.to_rgba_bytes()
+
+
+def test_stroke_butt_cap_ends_flush_with_endpoints():
+    canvas = Canvas(20, 20)
+    canvas.stroke_path("M4 10 L16 10", "black", 4, linecap="butt")
+    assert canvas.get_pixel(4, 10)[3] == 255
+    assert canvas.get_pixel(15, 10)[3] == 255
+    assert canvas.get_pixel(3, 10)[3] == 0
+    assert canvas.get_pixel(16, 10)[3] == 0
+    assert total_alpha(canvas) == pytest.approx(12 * 4, rel=0.01)
+
+
+def test_stroke_square_cap_extends_by_half_width():
+    canvas = Canvas(20, 20)
+    canvas.stroke_path("M4 10 L16 10", "black", 4, linecap="square")
+    assert canvas.get_pixel(2, 8)[3] == 255
+    assert canvas.get_pixel(17, 11)[3] == 255
+    assert canvas.get_pixel(1, 10)[3] == 0
+    assert canvas.get_pixel(18, 10)[3] == 0
+    assert total_alpha(canvas) == pytest.approx(16 * 4, rel=0.01)
+
+
+def test_stroke_square_cap_follows_direction():
+    canvas = Canvas(20, 20)
+    canvas.stroke_path("M10 4 L10 16", "black", 2, linecap="square")
+    assert canvas.get_pixel(10, 3)[3] == 255
+    assert canvas.get_pixel(9, 16)[3] == 255
+    assert canvas.get_pixel(10, 2)[3] == 0
+    assert canvas.get_pixel(10, 17)[3] == 0
+
+
+def test_stroke_miter_join_fills_corner():
+    canvas = Canvas(20, 20)
+    canvas.stroke_path(CORNER, "black", 4, linecap="butt", linejoin="miter")
+    assert canvas.get_pixel(17, 2)[3] == 255
+    assert canvas.get_pixel(16, 3)[3] == 255
+    assert canvas.get_pixel(3, 4)[3] == 0
+    assert canvas.get_pixel(16, 16)[3] == 0
+
+
+def test_stroke_bevel_join_cuts_corner():
+    canvas = Canvas(20, 20)
+    canvas.stroke_path(CORNER, "black", 4, linecap="butt", linejoin="bevel")
+    assert canvas.get_pixel(17, 2)[3] == 0
+    assert canvas.get_pixel(16, 3)[3] == 255
+    assert canvas.get_pixel(15, 5)[3] == 255
+    assert 100 < canvas.get_pixel(17, 3)[3] < 155
+
+
+def test_stroke_round_join_is_between_bevel_and_miter():
+    canvas = Canvas(20, 20)
+    canvas.stroke_path(CORNER, "black", 4, linecap="butt", linejoin="round")
+    assert 0 < canvas.get_pixel(17, 2)[3] < 255
+
+
+def test_stroke_miter_limit_falls_back_to_bevel():
+    canvas = Canvas(20, 20)
+    canvas.stroke_path(CORNER, "black", 4, linejoin="miter", miterlimit=1.4)
+    assert canvas.get_pixel(17, 2)[3] == 0
+    canvas = Canvas(20, 20)
+    canvas.stroke_path(CORNER, "black", 4, linejoin="miter", miterlimit=1.5)
+    assert canvas.get_pixel(17, 2)[3] == 255
+
+
+def test_stroke_sharp_miter_uses_default_limit_of_four():
+    canvas = Canvas(60, 30)
+    canvas.stroke_path("M2 5 L50 15 L2 25", "black", 2, linecap="butt", linejoin="miter")
+    assert canvas.get_pixel(51, 15)[3] == 0
+    assert canvas.get_pixel(49, 15)[3] == 255
+    canvas = Canvas(60, 30)
+    canvas.stroke_path("M2 5 L50 15 L2 25", "black", 2, linecap="butt", linejoin="miter", miterlimit=20)
+    assert canvas.get_pixel(50, 15)[3] > 200
+    assert canvas.get_pixel(54, 15)[3] > 0
+    assert canvas.get_pixel(55, 15)[3] == 0
+
+
+def test_closed_stroke_miters_every_corner_and_has_no_caps():
+    canvas = Canvas(20, 20)
+    canvas.stroke_path("M4 4 H16 V16 H4 Z", "black", 2, linecap="square", linejoin="miter")
+    for x, y in ((3, 3), (16, 3), (16, 16), (3, 16)):
+        assert canvas.get_pixel(x, y)[3] == 255
+    assert canvas.get_pixel(2, 4)[3] == 0
+    assert canvas.get_pixel(4, 2)[3] == 0
+    assert total_alpha(canvas) == pytest.approx(14 * 14 - 10 * 10, rel=0.01)
+
+
+def test_zero_length_subpath_caps():
+    round_canvas = Canvas(20, 20)
+    round_canvas.stroke_path("M10 10 L10 10", "black", 4, linecap="round")
+    assert round_canvas.get_pixel(10, 10)[3] == 255
+    assert 0 < round_canvas.get_pixel(8, 8)[3] < 255
+    square_canvas = Canvas(20, 20)
+    square_canvas.stroke_path("M10 10 L10 10", "black", 4, linecap="square")
+    assert square_canvas.get_pixel(8, 8)[3] == 255
+    assert square_canvas.get_pixel(11, 11)[3] == 255
+    butt_canvas = Canvas(20, 20)
+    butt_canvas.stroke_path("M10 10 L10 10", "black", 4, linecap="butt")
+    assert total_alpha(butt_canvas) == 0
+
+
+@pytest.mark.parametrize(
+    "options",
+    [{"linecap": "flat"}, {"linejoin": "arcs"}, {"miterlimit": 0.5}],
+)
+def test_invalid_stroke_options_raise(options):
+    with pytest.raises(ValueError):
+        Canvas(4, 4).stroke_path("M0 2 H4", "black", 1, **options)

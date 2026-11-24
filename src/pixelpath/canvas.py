@@ -13,6 +13,9 @@ Point = Tuple[float, float]
 PathInput = Union[str, Sequence[Command]]
 TransformInput = Union[str, Matrix, None]
 STROKE_JOIN_TOLERANCE = 0.05
+LINECAPS = ("butt", "round", "square")
+LINEJOINS = ("miter", "round", "bevel")
+DEFAULT_MITERLIMIT = 4.0
 
 
 def _signed_area(polygon: Sequence[Point]) -> float:
@@ -38,7 +41,72 @@ def _circle_polygon(cx: float, cy: float, radius: float) -> List[Point]:
     return [(cx + radius * math.cos(index * step), cy + radius * math.sin(index * step)) for index in range(count)]
 
 
-def _stroke_polygons(subpaths: Iterable[Subpath], half_width: float) -> List[List[Point]]:
+def _square_polygon(cx: float, cy: float, direction_x: float, direction_y: float, half_width: float) -> List[Point]:
+    along_x, along_y = direction_x * half_width, direction_y * half_width
+    across_x, across_y = -along_y, along_x
+    return _positively_oriented([
+        (cx - along_x - across_x, cy - along_y - across_y),
+        (cx + along_x - across_x, cy + along_y - across_y),
+        (cx + along_x + across_x, cy + along_y + across_y),
+        (cx - along_x + across_x, cy - along_y + across_y),
+    ])
+
+
+def _rectangle_cap(point: Point, direction: Point, half_width: float) -> List[Point]:
+    normal_x, normal_y = -direction[1] * half_width, direction[0] * half_width
+    end_x, end_y = point[0] + direction[0] * half_width, point[1] + direction[1] * half_width
+    return _positively_oriented([
+        (point[0] - normal_x, point[1] - normal_y),
+        (end_x - normal_x, end_y - normal_y),
+        (end_x + normal_x, end_y + normal_y),
+        (point[0] + normal_x, point[1] + normal_y),
+    ])
+
+
+def _round_join(vertex: Point, first: Point, second: Point, half_width: float) -> List[List[Point]]:
+    vertex_x, vertex_y = vertex
+    first_x, first_y = first
+    second_x, second_y = second
+    cosine = max(-1.0, min(1.0, (first_x * second_x + first_y * second_y) / (half_width * half_width)))
+    sagitta = half_width * (1 - math.sqrt((1 + cosine) / 2))
+    if sagitta > STROKE_JOIN_TOLERANCE:
+        return [_circle_polygon(vertex_x, vertex_y, half_width)]
+    polygons = []
+    for sign in (1.0, -1.0):
+        wedge = [
+            (vertex_x, vertex_y),
+            (vertex_x + sign * first_x, vertex_y + sign * first_y),
+            (vertex_x + sign * second_x, vertex_y + sign * second_y),
+        ]
+        if abs(_signed_area(wedge)) > 1e-12:
+            polygons.append(_positively_oriented(wedge))
+    return polygons
+
+
+def _angular_join(vertex: Point, first: Point, second: Point, half_width: float, linejoin: str, miterlimit: float) -> List[List[Point]]:
+    vertex_x, vertex_y = vertex
+    first_x, first_y = first
+    second_x, second_y = second
+    turn = first_x * second_y - first_y * second_x
+    if abs(turn) <= 1e-12 * half_width * half_width:
+        return []
+    sign = -1.0 if turn > 0 else 1.0
+    outer_first = (vertex_x + sign * first_x, vertex_y + sign * first_y)
+    outer_second = (vertex_x + sign * second_x, vertex_y + sign * second_y)
+    cosine = max(-1.0, min(1.0, (first_x * second_x + first_y * second_y) / (half_width * half_width)))
+    if linejoin == "miter" and 1 + cosine > 0 and 1 / math.sqrt((1 + cosine) / 2) <= miterlimit:
+        tip = (vertex_x + sign * (first_x + second_x) / (1 + cosine), vertex_y + sign * (first_y + second_y) / (1 + cosine))
+        return [_positively_oriented([(vertex_x, vertex_y), outer_first, tip, outer_second])]
+    return [_positively_oriented([(vertex_x, vertex_y), outer_first, outer_second])]
+
+
+def _stroke_polygons(
+    subpaths: Iterable[Subpath],
+    half_width: float,
+    linecap: str = "round",
+    linejoin: str = "round",
+    miterlimit: float = DEFAULT_MITERLIMIT,
+) -> List[List[Point]]:
     polygons: List[List[Point]] = []
     for subpath in subpaths:
         if len(subpath.points) == 1 and not subpath.closed:
@@ -50,14 +118,19 @@ def _stroke_polygons(subpaths: Iterable[Subpath], half_width: float) -> List[Lis
         if subpath.closed and len(points) > 1 and points[0] == points[-1]:
             points.pop()
         if len(points) == 1:
-            polygons.append(_circle_polygon(points[0][0], points[0][1], half_width))
+            if linecap == "round":
+                polygons.append(_circle_polygon(points[0][0], points[0][1], half_width))
+            elif linecap == "square":
+                polygons.append(_square_polygon(points[0][0], points[0][1], 1.0, 0.0, half_width))
             continue
         segment_ends = list(zip(points, points[1:]))
         if subpath.closed and len(points) > 2:
             segment_ends.append((points[-1], points[0]))
         normals = []
+        directions = []
         for (start_x, start_y), (end_x, end_y) in segment_ends:
             length = math.hypot(end_x - start_x, end_y - start_y)
+            directions.append(((end_x - start_x) / length, (end_y - start_y) / length))
             normal_x = -(end_y - start_y) / length * half_width
             normal_y = (end_x - start_x) / length * half_width
             normals.append((normal_x, normal_y))
@@ -70,23 +143,23 @@ def _stroke_polygons(subpaths: Iterable[Subpath], half_width: float) -> List[Lis
         joins = [(segment_ends[index][1], normals[index], normals[index + 1]) for index in range(len(segment_ends) - 1)]
         if subpath.closed and len(segment_ends) > 2:
             joins.append((segment_ends[-1][1], normals[-1], normals[0]))
-        for (vertex_x, vertex_y), (first_x, first_y), (second_x, second_y) in joins:
-            cosine = max(-1.0, min(1.0, (first_x * second_x + first_y * second_y) / (half_width * half_width)))
-            sagitta = half_width * (1 - math.sqrt((1 + cosine) / 2))
-            if sagitta > STROKE_JOIN_TOLERANCE:
-                polygons.append(_circle_polygon(vertex_x, vertex_y, half_width))
-                continue
-            for sign in (1.0, -1.0):
-                wedge = [
-                    (vertex_x, vertex_y),
-                    (vertex_x + sign * first_x, vertex_y + sign * first_y),
-                    (vertex_x + sign * second_x, vertex_y + sign * second_y),
-                ]
-                if abs(_signed_area(wedge)) > 1e-12:
-                    polygons.append(_positively_oriented(wedge))
-        if not subpath.closed or len(points) == 2:
-            polygons.append(_circle_polygon(points[0][0], points[0][1], half_width))
-            polygons.append(_circle_polygon(points[-1][0], points[-1][1], half_width))
+        for vertex, first, second in joins:
+            if linejoin == "round":
+                polygons.extend(_round_join(vertex, first, second, half_width))
+            else:
+                polygons.extend(_angular_join(vertex, first, second, half_width, linejoin, miterlimit))
+        if subpath.closed and len(points) == 2:
+            if linejoin == "round":
+                polygons.append(_circle_polygon(points[0][0], points[0][1], half_width))
+                polygons.append(_circle_polygon(points[-1][0], points[-1][1], half_width))
+        elif not subpath.closed:
+            start_direction = (-directions[0][0], -directions[0][1])
+            if linecap == "round":
+                polygons.append(_circle_polygon(points[0][0], points[0][1], half_width))
+                polygons.append(_circle_polygon(points[-1][0], points[-1][1], half_width))
+            elif linecap == "square":
+                polygons.append(_rectangle_cap(points[0], start_direction, half_width))
+                polygons.append(_rectangle_cap(points[-1], directions[-1], half_width))
     return polygons
 
 
@@ -169,14 +242,24 @@ class Canvas:
         width: float = 1.0,
         opacity: float = 1.0,
         transform: TransformInput = None,
+        *,
+        linecap: str = "round",
+        linejoin: str = "round",
+        miterlimit: float = DEFAULT_MITERLIMIT,
     ) -> None:
+        if linecap not in LINECAPS:
+            raise ValueError(f"linecap must be 'butt', 'round' or 'square', got {linecap!r}")
+        if linejoin not in LINEJOINS:
+            raise ValueError(f"linejoin must be 'miter', 'round' or 'bevel', got {linejoin!r}")
+        if not float(miterlimit) >= 1:
+            raise ValueError(f"miterlimit must be at least 1, got {miterlimit!r}")
         paint = self._resolve_paint(color, opacity)
         matrix = self._matrix(transform)
         half_width = float(width) * matrix.scale_factor() / 2
         if paint is None or half_width <= 0:
             return
         subpaths = flatten_path(self._commands(d), matrix, DEFAULT_TOLERANCE)
-        polygons = _stroke_polygons(subpaths, half_width)
+        polygons = _stroke_polygons(subpaths, half_width, linecap, linejoin, float(miterlimit))
         if polygons:
             self._composite(rasterize(polygons, self.width, self.height, "nonzero"), paint)
 

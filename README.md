@@ -5,7 +5,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776ab.svg)](https://www.python.org/)
 [![Dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests: 243 passing](https://img.shields.io/badge/tests-243%20passing-brightgreen.svg)](tests)
+[![Tests: 264 passing](https://img.shields.io/badge/tests-264%20passing-brightgreen.svg)](tests)
 
 pixelpath turns icons, logos, badges and other path-based SVGs into PNG files
 using nothing but the Python standard library (`zlib`, `struct`, `math` and
@@ -73,9 +73,15 @@ canvas.save("drawing.png")
 | `fill_rect(x, y, w, h, color, rx=0, ry=None, opacity=1, transform=None)` | Filled, optionally rounded, rectangle. |
 | `fill_circle(cx, cy, r, color, ...)` / `fill_ellipse(cx, cy, rx, ry, color, ...)` | Filled circle or ellipse. |
 | `fill_polygon(points, color, opacity=1, fill_rule="nonzero", transform=None)` | Filled polygon from `(x, y)` pairs. |
-| `stroke_path(d, color, width, opacity=1, transform=None)` | Stroke with round joins and round caps. |
+| `stroke_path(d, color, width, opacity=1, transform=None, *, linecap="round", linejoin="round", miterlimit=4)` | Stroke path data. `linecap` is `butt`, `round` or `square`; `linejoin` is `miter`, `round` or `bevel`; miter joins longer than `miterlimit` times the stroke width fall back to bevel. |
 | `get_pixel(x, y)`, `to_rgba_bytes()`, `to_png_bytes()`, `save(path)` | Read pixels or export. |
 | `parse_path(d)` | Parse path data into absolute `M`, `L`, `C`, `Q`, `A`, `Z` commands. |
+
+`Canvas.stroke_path` keeps its original round-cap, round-join look by default so
+existing code renders unchanged. `render_svg` follows the SVG specification
+instead: strokes default to `butt` caps and `miter` joins with a miter limit of 4
+unless the document sets `stroke-linecap`, `stroke-linejoin` or
+`stroke-miterlimit`.
 
 Colours accept any string listed under [Supported SVG features](#supported-svg-features)
 or an `(r, g, b)` / `(r, g, b, alpha)` tuple with channels 0-255 and alpha 0-1.
@@ -102,7 +108,7 @@ Every image below was rendered by pixelpath itself from the SVGs in
 | Path data | `M L H V C S Q T A Z` absolute and relative, implicit repeats, compact numbers (`1.5.5`, `-1-2`, `1e-3`), unseparated arc flags, S/T reflection |
 | Transforms | `matrix`, `translate`, `scale`, `rotate` (with optional centre), `skewX`, `skewY`, lists of any length |
 | Fill | `fill`, `fill-opacity`, `fill-rule` (`nonzero`, `evenodd`), inherited through groups |
-| Stroke | `stroke`, `stroke-width`, `stroke-opacity` on every shape, round joins and caps |
+| Stroke | `stroke`, `stroke-width`, `stroke-opacity` on every shape; `stroke-linecap` (`butt`, `round`, `square`), `stroke-linejoin` (`miter`, `round`, `bevel`) and `stroke-miterlimit`, with the SVG defaults `butt`, `miter` and `4` |
 | Opacity | `opacity` on groups and shapes, `display="none"`, `visibility="hidden"` |
 | Styling | Presentation attributes and inline `style="..."` declarations |
 | Colours | `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()` (numbers or percentages, comma or space syntax), `none`, `transparent`, `currentColor`, the 16 basic CSS names (plus `grey`, `cyan`, `magenta`) |
@@ -123,8 +129,8 @@ everything else:
   `width`/`height` on a `<use>` that references a nested `<svg>`
 - Rendering `<defs>` or `<symbol>` content directly (only through `<use>`, as in SVG)
 - `<style>` sheets and CSS selectors (inline `style` attributes are supported)
-- `stroke-dasharray`, `stroke-linejoin` / `stroke-linecap` other than round
-  (miter, bevel, butt and square are drawn as round), `stroke-miterlimit`
+- `stroke-dasharray`, `stroke-dashoffset`; the SVG 2 joins `miter-clip` and `arcs`
+  (ignored, so the inherited join is used)
 - `preserveAspectRatio` values other than `xMidYMid meet`
 - Named colours beyond the basic set; unknown colour values are ignored, as if the
   attribute were absent
@@ -155,8 +161,9 @@ SVG text ─▶ parse ─▶ flatten ─▶ scanline coverage ─▶ composite �
    both directions with a prefix-sum accumulation per row.
 4. **Composite.** Coverage multiplies the paint alpha, and the result is blended
    source-over in straight (non-premultiplied) alpha on a floating-point buffer.
-   Strokes are built from quads per segment plus circles at joins and caps, filled
-   in one `nonzero` pass so overlaps never double-blend.
+   Strokes are built from quads per segment plus join polygons (miter, bevel
+   or circle) and caps (square or circle), filled in one `nonzero` pass so
+   overlaps never double-blend.
 5. **PNG.** A minimal encoder writes the signature, `IHDR`, a zlib-compressed `IDAT`
    and `IEND`, each with its CRC-32.
 
@@ -182,7 +189,7 @@ git clone https://github.com/LiamSDD/pixelpath
 cd pixelpath
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-python3 -m pytest -q      # 243 tests
+python3 -m pytest -q      # 264 tests
 python3 bench.py
 ```
 

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 from xml.parsers import expat
 
-from .canvas import Canvas
+from .canvas import DEFAULT_MITERLIMIT, LINECAPS, LINEJOINS, Canvas
 from .color import RGBA, ColorError, ColorInput, parse_color
 from .path import Command, PathError, ellipse_commands, parse_path, polygon_commands, rect_commands
 from .transform import Matrix, TransformError, parse_transform
@@ -22,7 +22,19 @@ LENGTH_PATTERN = re.compile(r"^\s*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*
 UNIT_SCALES = {"": 1.0, "px": 1.0, "pt": 96 / 72, "pc": 16.0, "mm": 96 / 25.4, "cm": 96 / 2.54, "in": 96.0, "em": 16.0, "ex": 8.0}
 CONTAINER_TAGS = {"svg", "g", "a", "switch"}
 SHAPE_TAGS = {"path", "rect", "circle", "ellipse", "line", "polyline", "polygon"}
-INHERITED_PROPERTIES = ("fill", "fill-opacity", "fill-rule", "stroke", "stroke-width", "stroke-opacity", "color", "visibility")
+INHERITED_PROPERTIES = (
+    "fill",
+    "fill-opacity",
+    "fill-rule",
+    "stroke",
+    "stroke-width",
+    "stroke-opacity",
+    "stroke-linecap",
+    "stroke-linejoin",
+    "stroke-miterlimit",
+    "color",
+    "visibility",
+)
 STYLE_PROPERTIES = set(INHERITED_PROPERTIES) | {"opacity", "display"}
 INITIAL_STYLE = {
     "fill": "black",
@@ -31,6 +43,9 @@ INITIAL_STYLE = {
     "stroke": "none",
     "stroke-width": "1",
     "stroke-opacity": "1",
+    "stroke-linecap": "butt",
+    "stroke-linejoin": "miter",
+    "stroke-miterlimit": "4",
     "color": "black",
     "visibility": "visible",
 }
@@ -175,6 +190,26 @@ def _resolve_paint(value: str, current_color: RGBA) -> Optional[RGBA]:
         return None
 
 
+def _parse_miterlimit(value: str) -> Optional[float]:
+    try:
+        limit = float(value.strip())
+    except ValueError:
+        return None
+    return limit if limit >= 1 and math.isfinite(limit) else None
+
+
+def _is_valid_property(name: str, value: str) -> bool:
+    if name in ("fill", "stroke", "color"):
+        return _is_valid_paint(value)
+    if name == "stroke-linecap":
+        return value.strip().lower() in LINECAPS
+    if name == "stroke-linejoin":
+        return value.strip().lower() in LINEJOINS
+    if name == "stroke-miterlimit":
+        return _parse_miterlimit(value) is not None
+    return True
+
+
 def _is_valid_paint(value: str) -> bool:
     text = value.strip()
     if text.lower().startswith("url("):
@@ -237,7 +272,7 @@ class _Renderer:
             if name not in declared:
                 continue
             value = declared[name]
-            if name in ("fill", "stroke", "color") and not _is_valid_paint(value):
+            if not _is_valid_property(name, value):
                 continue
             style[name] = value
         opacity *= _parse_opacity(declared.get("opacity", "1"))
@@ -361,7 +396,16 @@ class _Renderer:
         stroke = _resolve_paint(style["stroke"], current_color)
         stroke_width = _parse_length(style["stroke-width"], self.view_diagonal, 1.0) or 0.0
         if stroke is not None and stroke_commands and stroke_width > 0:
-            self.canvas.stroke_path(stroke_commands, stroke, stroke_width, opacity * _parse_opacity(style["stroke-opacity"]), matrix)
+            self.canvas.stroke_path(
+                stroke_commands,
+                stroke,
+                stroke_width,
+                opacity * _parse_opacity(style["stroke-opacity"]),
+                matrix,
+                linecap=style["stroke-linecap"].strip().lower(),
+                linejoin=style["stroke-linejoin"].strip().lower(),
+                miterlimit=_parse_miterlimit(style["stroke-miterlimit"]) or DEFAULT_MITERLIMIT,
+            )
 
 
 def _output_size(
