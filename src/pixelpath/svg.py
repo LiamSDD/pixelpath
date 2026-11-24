@@ -17,6 +17,8 @@ MAX_USE_DEPTH = 32
 MAX_USE_EXPANSION = 10000
 DEFAULT_WIDTH = 300.0
 DEFAULT_HEIGHT = 150.0
+MAX_OUTPUT_SIDE = 16384
+MAX_OUTPUT_PIXELS = 100_000_000
 NUMBER_PATTERN = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
 LENGTH_PATTERN = re.compile(r"^\s*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*(px|pt|pc|mm|cm|in|em|ex|%)?\s*$", re.IGNORECASE)
 UNIT_SCALES = {"": 1.0, "px": 1.0, "pt": 96 / 72, "pc": 16.0, "mm": 96 / 25.4, "cm": 96 / 2.54, "in": 96.0, "em": 16.0, "ex": 8.0}
@@ -425,9 +427,19 @@ def _output_size(
         output_width, output_height = height * intrinsic_width / intrinsic_height, height
     else:
         output_width, output_height = intrinsic_width, intrinsic_height
+    if not (math.isfinite(output_width) and math.isfinite(output_height)):
+        raise ValueError("output width and height must be finite numbers")
     if output_width <= 0 or output_height <= 0:
         raise ValueError("output width and height must be positive")
-    return max(1, int(round(output_width))), max(1, int(round(output_height)))
+    pixel_width, pixel_height = max(1, int(round(output_width))), max(1, int(round(output_height)))
+    if pixel_width > MAX_OUTPUT_SIDE or pixel_height > MAX_OUTPUT_SIDE:
+        raise SVGError(f"output size {pixel_width}x{pixel_height} is too large: each side is limited to {MAX_OUTPUT_SIDE} pixels")
+    if pixel_width * pixel_height > MAX_OUTPUT_PIXELS:
+        raise SVGError(
+            f"output size {pixel_width}x{pixel_height} is too large: "
+            f"the total is limited to {MAX_OUTPUT_PIXELS // 1_000_000} megapixels"
+        )
+    return pixel_width, pixel_height
 
 
 def render_svg(

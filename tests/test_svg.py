@@ -476,3 +476,31 @@ def test_svg_invalid_stroke_line_values_are_ignored():
     canvas = render_svg(svg(body))
     assert canvas.get_pixel(17, 2)[3] == 0
     assert canvas.get_pixel(3, 4)[3] == 0
+
+
+@pytest.mark.parametrize(
+    "attributes, options",
+    [
+        ('width="16385" height="1"', {}),
+        ('width="1" height="20000"', {}),
+        ('width="10" height="10"', {"width": 16385}),
+        ('width="10" height="10"', {"scale": 2000}),
+        ('width="10000" height="10001"', {}),
+        ('viewBox="0 0 1 1"', {"width": 10001, "height": 10000}),
+    ],
+)
+def test_output_larger_than_limits_is_refused(attributes, options):
+    with pytest.raises(SVGError, match="too large"):
+        render_svg(svg("", attributes), **options)
+
+
+def test_output_at_side_limit_is_allowed():
+    canvas = render_svg(svg('<rect width="16384" height="1" fill="red"/>', 'width="16384" height="1"'))
+    assert (canvas.width, canvas.height) == (16384, 1)
+    assert canvas.get_pixel(16383, 0) == (255, 0, 0, 255)
+
+
+@pytest.mark.parametrize("options", [{"scale": float("inf")}, {"width": float("nan")}, {"height": float("inf")}])
+def test_non_finite_output_size_is_refused(options):
+    with pytest.raises(ValueError):
+        render_svg(svg(""), **options)

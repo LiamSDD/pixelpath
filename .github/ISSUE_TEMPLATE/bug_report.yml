@@ -1,0 +1,55 @@
+name: Bug report
+description: An SVG renders incorrectly, an error is raised, or pixelpath crashes.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please reduce the SVG to the smallest file that still shows the problem.
+        Security issues must not be reported here; see SECURITY.md for private reporting.
+  - type: textarea
+    id: svg
+    attributes:
+      label: SVG input
+      description: Paste the SVG source (or attach the file). Keep it as small as possible.
+      render: xml
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command or code
+      description: The exact `pixelpath` command line or Python code you ran.
+      placeholder: pixelpath icon.svg -o icon.png --width 256
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected output
+      description: What you expected to see. A screenshot from a browser rendering of the same SVG helps.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual output
+      description: What pixelpath produced. Attach the PNG, or paste the full error message or traceback.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: pixelpath version
+      description: Output of `pixelpath --version`.
+      placeholder: pixelpath 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Python version and operating system
+      placeholder: CPython 3.12.4 on Ubuntu 24.04
+    validations:
+      required: true

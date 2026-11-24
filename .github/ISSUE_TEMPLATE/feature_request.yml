@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest support for an SVG feature or an improvement to the API or CLI.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        pixelpath stays standard-library only and focused on icons, logos and diagrams.
+        Please check the "Not supported" list in the README before opening a request.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what stops you today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: The SVG feature, option or API you would like, and how it should behave.
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Example SVG
+      description: A small SVG that uses the feature, if relevant.
+      render: xml
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds or other approaches you have tried.
