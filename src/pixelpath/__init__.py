@@ -5,7 +5,7 @@ from .png import PNGError
 from .svg import SVGError, UnsafeSVGError, render_svg
 from .transform import Matrix, TransformError, parse_transform
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "Canvas",

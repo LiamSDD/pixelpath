@@ -1,3 +1,4 @@
+import os
 import pytest
 
 from pixelpath import __version__, parse_path, render_svg
@@ -58,5 +59,7 @@ def test_logo_png_round_trip(logo):
 
 
 def test_public_api():
-    assert __version__ == "0.1.0"
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "pyproject.toml"), encoding="utf-8") as handle:
+        assert f'version = "{__version__}"' in handle.read()
     assert parse_path("M0 0")[0] == ("M", (0.0, 0.0))
