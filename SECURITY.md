@@ -7,8 +7,8 @@ exhaustion bugs as security issues.
 
 | Version | Supported |
 | --- | --- |
-| 0.1.x | Yes |
-| < 0.1 | No |
+| 0.2.x | Yes |
+| < 0.2 | No |
 
 Fixes are released as a new patch version of the latest supported minor release.
 
