@@ -1,40 +1,39 @@
 # pixelpath
 
-**Zero-dependency SVG rasterizer for Python. Renders SVG paths and shapes to anti-aliased, transparent PNGs. No Cairo, no Pillow, no native code.**
+**Renders SVG to crisp, transparent PNGs with only the Python standard library.**
 
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776ab.svg)](https://www.python.org/)
-[![Dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](pyproject.toml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests: 275 passing](https://img.shields.io/badge/tests-275%20passing-brightgreen.svg)](tests)
+<a href="https://github.com/LiamSDD/LiamSDD/blob/main/assets/demos/pixelpath-demo.mp4"><img src="https://raw.githubusercontent.com/LiamSDD/LiamSDD/main/assets/demos/pixelpath-loop.gif" alt="pixelpath demo: SVG icons rendered to transparent PNGs with no dependencies" width="100%"></a>
 
-pixelpath turns icons, logos, badges and other path-based SVGs into PNG files
-using nothing but the Python standard library (`zlib`, `struct`, `math` and
-`xml.etree`).
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776ab.svg)](https://www.python.org/) [![Dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](pyproject.toml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Tests: 275 passing](https://img.shields.io/badge/tests-275%20passing-brightgreen.svg)](tests)
 
-## Why pixelpath
+## Why
 
-- **No system libraries.** No Cairo, librsvg, Pillow, ImageMagick or headless
-  browser. Nothing to compile, nothing to `apt-get`.
-- **Works anywhere Python runs.** CI runners, AWS Lambda, slim containers, locked-down
-  corporate machines, Pyodide: if it runs CPython 3.9 or newer, it renders.
-- **Transparent, anti-aliased output.** Real alpha channel, smooth edges, straight-alpha
-  RGBA PNGs that drop cleanly into web pages, READMEs and app bundles.
-- **Safe XML handling.** Documents containing `<!DOCTYPE` or `<!ENTITY` are refused
-  before parsing, which shuts the door on XXE and "billion laughs" entity expansion.
-- **Bounded output.** Output images are limited to 16384 pixels per side and
-  100 megapixels in total; larger requests raise `SVGError` instead of exhausting memory.
-- **Small and readable.** A few hundred lines per stage, each stage separately
-  tested and usable on its own.
-
-## Install
-
-```bash
-pip install git+https://github.com/LiamSDD/pixelpath
-```
+- **No system libraries.** No Cairo, librsvg, Pillow, ImageMagick or headless browser; only `zlib`, `struct`, `math` and `xml.etree`.
+- **Runs anywhere CPython 3.9+ runs:** CI runners, AWS Lambda, slim containers, locked-down machines, Pyodide.
+- **Transparent, anti-aliased output:** straight-alpha RGBA PNGs for web pages, READMEs and app bundles.
+- **Safe XML.** `<!DOCTYPE` and `<!ENTITY` are refused before parsing, which blocks XXE and "billion laughs".
+- **Bounded output:** at most 16384 pixels per side and 100 megapixels; larger requests raise `SVGError`.
 
 ## Quick start
 
-### Command line
+```bash
+pip install git+https://github.com/LiamSDD/pixelpath
+pixelpath logo.svg -o logo.png                    # intrinsic size
+pixelpath logo.svg -o logo@512.png --width 512    # height follows aspect ratio
+```
+
+[Watch the demo](https://github.com/LiamSDD/LiamSDD/blob/main/assets/demos/pixelpath-demo.mp4) · [Examples](examples) · [Supported SVG features](#supported-svg-features) · [Python API](#python-api)
+
+## Showcase
+
+Rendered by pixelpath from the SVGs in [`examples/`](examples) at `--scale 2`.
+
+| Key-lock mark | Badge | Even-odd ring |
+| :---: | :---: | :---: |
+| ![Key-lock mark](docs/keylock.png) | ![Badge](docs/badge.png) | ![Even-odd ring](docs/ring.png) |
+| [`keylock.svg`](examples/keylock.svg): rounded rect, stroked arc shackle, keyhole | [`badge.svg`](examples/badge.svg): rounded rects, circle, arc stroke, group transform, fill-opacity | [`ring.svg`](examples/ring.svg): `fill-rule="evenodd"` concentric arcs, transformed self-intersecting star |
+
+## Command line
 
 ```bash
 pixelpath logo.svg -o logo.png                    # intrinsic size
@@ -44,11 +43,11 @@ pixelpath logo.svg -o logo-white.png --background white
 python -m pixelpath logo.svg -o logo.png          # same thing, no console script needed
 ```
 
-`--width`, `--height` and `--scale` are mutually exclusive. When `-o` is omitted
-the output is written next to the input with a `.png` suffix. The exit status
-is `0` on success and `1` on an error, which is printed to stderr.
+- `--width`, `--height` and `--scale` are mutually exclusive.
+- Without `-o`, the PNG is written next to the input with a `.png` suffix.
+- Exit status is `0` on success and `1` on an error, printed to stderr.
 
-### Python API
+## Python API
 
 ```python
 from pixelpath import Canvas, render_svg
@@ -79,25 +78,9 @@ canvas.save("drawing.png")
 | `get_pixel(x, y)`, `to_rgba_bytes()`, `to_png_bytes()`, `save(path)` | Read pixels or export. |
 | `parse_path(d)` | Parse path data into absolute `M`, `L`, `C`, `Q`, `A`, `Z` commands. |
 
-`Canvas.stroke_path` keeps its original round-cap, round-join look by default so
-existing code renders unchanged. `render_svg` follows the SVG specification
-instead: strokes default to `butt` caps and `miter` joins with a miter limit of 4
-unless the document sets `stroke-linecap`, `stroke-linejoin` or
-`stroke-miterlimit`.
-
-Colours accept any string listed under [Supported SVG features](#supported-svg-features)
-or an `(r, g, b)` / `(r, g, b, alpha)` tuple with channels 0-255 and alpha 0-1.
-Transforms accept an SVG transform string or a `pixelpath.Matrix`.
-
-## Showcase
-
-Every image below was rendered by pixelpath itself from the SVGs in
-[`examples/`](examples) at `--scale 2`.
-
-| Key-lock mark | Badge | Even-odd ring |
-| :---: | :---: | :---: |
-| ![Key-lock mark](docs/keylock.png) | ![Badge](docs/badge.png) | ![Even-odd ring](docs/ring.png) |
-| [`keylock.svg`](examples/keylock.svg): rounded rect, stroked arc shackle, keyhole | [`badge.svg`](examples/badge.svg): rounded rects, circle, arc stroke, group transform, fill-opacity | [`ring.svg`](examples/ring.svg): `fill-rule="evenodd"` concentric arcs, transformed self-intersecting star |
+- **Stroke defaults differ.** `Canvas.stroke_path` keeps round caps and joins, so existing code renders unchanged. `render_svg` follows the SVG spec: `butt` caps, `miter` joins, miter limit 4, unless the document sets `stroke-linecap`, `stroke-linejoin` or `stroke-miterlimit`.
+- **Colours:** any string listed under [Supported SVG features](#supported-svg-features), or an `(r, g, b)` / `(r, g, b, alpha)` tuple with channels 0-255 and alpha 0-1.
+- **Transforms:** an SVG transform string or a `pixelpath.Matrix`.
 
 ## Supported SVG features
 
@@ -117,29 +100,24 @@ Every image below was rendered by pixelpath itself from the SVGs in
 | Paint fallback | `fill="url(#gradient) blue"` uses the fallback colour |
 | Units | Percentages on shape geometry resolve against the `viewBox` |
 
-### Not supported
+<details>
+<summary><b>Not supported, and known approximations</b></summary>
 
-These are skipped without raising, so documents that use them still render
-everything else:
+These are skipped without raising, so documents that use them still render everything else:
 
-- Gradients (`linearGradient`, `radialGradient`) and patterns; a `url(...)` paint
-  without a fallback colour paints nothing
+- Gradients (`linearGradient`, `radialGradient`) and patterns; a `url(...)` paint without a fallback colour paints nothing
 - `<text>`, fonts, `<image>`, `<foreignObject>`
 - Filters, masks, clip paths, markers
-- `<use>` references to external files (`href="other.svg#id"`) and missing ids;
-  symbol clipping to its viewport, `preserveAspectRatio` on `<symbol>`, and
-  `width`/`height` on a `<use>` that references a nested `<svg>`
+- `<use>` references to external files (`href="other.svg#id"`) and missing ids; symbol clipping to its viewport, `preserveAspectRatio` on `<symbol>`, and `width`/`height` on a `<use>` that references a nested `<svg>`
 - Rendering `<defs>` or `<symbol>` content directly (only through `<use>`, as in SVG)
 - `<style>` sheets and CSS selectors (inline `style` attributes are supported)
-- `stroke-dasharray`, `stroke-dashoffset`; the SVG 2 joins `miter-clip` and `arcs`
-  (ignored, so the inherited join is used)
+- `stroke-dasharray`, `stroke-dashoffset`; the SVG 2 joins `miter-clip` and `arcs` (ignored, so the inherited join is used)
 - `preserveAspectRatio` values other than `xMidYMid meet`
-- Named colours beyond the basic set; unknown colour values are ignored, as if the
-  attribute were absent
+- Named colours beyond the basic set; unknown colour values are ignored, as if the attribute were absent
 
-Approximations worth knowing about: group `opacity` is multiplied into each child
-rather than composited as an isolated layer, and stroke width under a non-uniform
-transform uses the square root of the transform's area scale.
+Approximations: group `opacity` is multiplied into each child rather than composited as an isolated layer, and stroke width under a non-uniform transform uses the square root of the transform's area scale.
+
+</details>
 
 ## How it works
 
@@ -147,27 +125,18 @@ transform uses the square root of the transform's area scale.
 SVG text ─▶ parse ─▶ flatten ─▶ scanline coverage ─▶ composite ─▶ PNG
 ```
 
-1. **Parse.** The document is screened for `<!DOCTYPE`/`<!ENTITY` (both textually
-   and with an expat pre-pass that rejects any doctype or entity declaration in any
-   encoding), then parsed with `xml.etree`. Path data is tokenised by a hand-written
-   scanner and normalised to absolute `M`, `L`, `C`, `Q`, `A` and `Z` commands.
-2. **Flatten.** Control points are transformed to device space (affine maps preserve
-   Bezier curves), then curves are split into line segments. The segment count per
-   curve is derived from the curve's second differences so the polyline never deviates
-   more than 0.05 px from the true curve. Arcs go through the SVG implementation-notes
-   endpoint-to-centre conversion and become at most quarter-turn cubic segments.
-3. **Scanline coverage.** Each pixel row is sampled with 16 sub-scanlines. On every
-   sub-scanline the edge crossings are sorted and walked with a winding counter, so
-   `nonzero` and `evenodd` are exact for holes and self-intersections. Horizontal
-   coverage within a span is computed analytically, giving smooth anti-aliasing in
-   both directions with a prefix-sum accumulation per row.
-4. **Composite.** Coverage multiplies the paint alpha, and the result is blended
-   source-over in straight (non-premultiplied) alpha on a floating-point buffer.
-   Strokes are built from quads per segment plus join polygons (miter, bevel
-   or circle) and caps (square or circle), filled in one `nonzero` pass so
-   overlaps never double-blend.
-5. **PNG.** A minimal encoder writes the signature, `IHDR`, a zlib-compressed `IDAT`
-   and `IEND`, each with its CRC-32.
+A few hundred lines per stage, each tested and usable on its own.
+
+<details>
+<summary><b>Each stage in detail</b></summary>
+
+1. **Parse.** The document is screened for `<!DOCTYPE`/`<!ENTITY` (both textually and with an expat pre-pass that rejects any doctype or entity declaration in any encoding), then parsed with `xml.etree`. Path data is tokenised by a hand-written scanner and normalised to absolute `M`, `L`, `C`, `Q`, `A` and `Z` commands.
+2. **Flatten.** Control points are transformed to device space (affine maps preserve Bezier curves), then curves are split into line segments. The segment count per curve is derived from the curve's second differences so the polyline never deviates more than 0.05 px from the true curve. Arcs go through the SVG implementation-notes endpoint-to-centre conversion and become at most quarter-turn cubic segments.
+3. **Scanline coverage.** Each pixel row is sampled with 16 sub-scanlines. On every sub-scanline the edge crossings are sorted and walked with a winding counter, so `nonzero` and `evenodd` are exact for holes and self-intersections. Horizontal coverage within a span is computed analytically, giving smooth anti-aliasing in both directions with a prefix-sum accumulation per row.
+4. **Composite.** Coverage multiplies the paint alpha, and the result is blended source-over in straight (non-premultiplied) alpha on a floating-point buffer. Strokes are built from quads per segment plus join polygons (miter, bevel or circle) and caps (square or circle), filled in one `nonzero` pass so overlaps never double-blend.
+5. **PNG.** A minimal encoder writes the signature, `IHDR`, a zlib-compressed `IDAT` and `IEND`, each with its CRC-32.
+
+</details>
 
 ## Performance
 
@@ -180,9 +149,7 @@ Measured with [`bench.py`](bench.py) on an Apple M3 laptop with CPython 3.9.6:
 | `examples/badge.svg` at 512 px wide | 0.17 s |
 | `examples/ring.svg` at 512 px wide | 0.17 s |
 
-Cost grows with the number of covered pixels and the number of edges. pixelpath
-is designed for icons, logos and diagrams, not for rendering huge or very dense
-illustrations.
+Cost grows with covered pixels and edges. pixelpath is built for icons, logos and diagrams, not huge or very dense illustrations.
 
 ## Development
 
@@ -195,14 +162,11 @@ python3 -m pytest -q      # 275 tests
 python3 bench.py
 ```
 
-The test suite covers path-parser edge cases, arc conversion, coverage accuracy
-(a filled square's total coverage equals its area within 0.5%), fill rules, PNG
-validity and CRCs, transforms, colour parsing, XXE refusal, the CLI end to end and
-a golden logo render with exact pixel colours. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Tests cover path-parser edge cases, arc conversion, coverage accuracy (a filled square's total coverage equals its area within 0.5%), fill rules, PNG validity and CRCs, transforms, colour parsing, XXE refusal, the CLI end to end and a golden logo render with exact pixel colours. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Security
 
-Please report vulnerabilities privately; see [SECURITY.md](SECURITY.md).
+Report vulnerabilities privately; see [SECURITY.md](SECURITY.md).
 
 ## License
 
